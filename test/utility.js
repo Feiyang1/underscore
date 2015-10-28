@@ -188,9 +188,13 @@
   });
 
   test('template', function() {
+    
     var basicTemplate = _.template("<%= thing %> is gettin' on my noives!");
     var result = basicTemplate({thing: 'This'});
     equal(result, "This is gettin' on my noives!", 'can do basic attribute interpolation');
+    
+    basicTemplate = _.template("<%= data.thing %> is gettin' on my noives!", {variable: 'data'});
+    result = basicTemplate({thing: 'feiyang'});
 
     var sansSemicolonTemplate = _.template('A <% this %> B');
     equal(sansSemicolonTemplate(), 'A  B');

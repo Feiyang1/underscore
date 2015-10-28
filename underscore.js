@@ -68,14 +68,14 @@
 			return func.apply(context, arguments);
 		};
 	};
-	
-	var cb = function(func, context){
-		if(func == null) return _.identity;
-		else if(_.isFunction(func)) 
-			return function(){
+
+	var cb = function (func, context) {
+		if (func == null) return _.identity;
+		else if (_.isFunction(func))
+			return function () {
 				return func.apply(context, arguments);
 			};
-		else if(_.isObject(func)) return _.matcher(func);
+		else if (_.isObject(func)) return _.matcher(func);
 		else return _.property(func);
 	};
 
@@ -112,62 +112,351 @@
 	_.create = create;
 	
 	//arrays
-	_.last = last;
+	_.chunk = function (array, count) {
+		if (count == null || count < 1) return [];
 
-	_.range = function (stop) {
-		var results = [];
+		var result = [];
+		var i = 0, length = array.length;
+		while (i < length) {
+			result.push(Array.prototype.slice.call(array, i, i += count));
+		}
+		return result;
+	};
 
-		for (var i = 0; i < stop; i++) {
-			results.push(i);
+	_.range = function () {
+		var start = 0, stop = 0, step = 1, argLength = getLength(arguments), result = [];
+		if (argLength === 1) stop = arguments[0];
+		else if (argLength === 2) { start = arguments[0], stop = arguments[1]; }
+		else if (argLength === 3) { start = arguments[0], stop = arguments[1], step = arguments[2]; }
+
+		var i;
+		if (step > 0) {
+			i = start;
+			while (i < stop) {
+				result.push(i);
+				i += step;
+			}
+		}
+		else if (step < 0) {
+			i = start;
+			while (i > stop) {
+				result.push(i);
+				i += step;
+			}
+		}
+
+		return result;
+	};
+
+	_.findIndex = function (array, predicate, context) {
+		var myPredicate = cb(predicate, context);
+
+		for (var i = 0; i < getLength(array); i++) {
+			if (myPredicate(array[i], i, array)) return i;
+		}
+		return -1;
+	};
+
+	_.findLastIndex = function (array, predicate, context) {
+		var myPredicate = cb(predicate, context);
+
+		for (var i = getLength(array) - 1; i >= 0; i--) {
+			if (myPredicate(array[i], i, array)) return i;
+		}
+		return -1;
+	};
+
+	_.lastIndexOf = function (array, value, fromIndex) {
+		var startIndex = getLength(array);
+		var isNAN = value !== value;
+
+		if (_.isNumber(fromIndex)) startIndex = Math.min(getLength(array) - 1, fromIndex >= 0 ? fromIndex : getLength(array) + fromIndex);
+
+		for (var i = startIndex; i >= 0; i--) {
+			if (array[i] === value || (isNAN && array[i] !== array[i])) return i;
+		}
+		return -1;
+	};
+
+	_.indexOf = function (array, value, isSorted) {
+		var startIndex = 0;
+		var isNAN = value !== value;
+		if (_.isBoolean(isSorted)) {// binary search
+			var start = 0, end = getLength(array) - 1;
+			while (start <= end) {
+				if (value === array[Math.floor((start + end) / 2)] || (isNAN && array[Math.floor((start + end) / 2)] !== array[Math.floor((start + end) / 2)])) {
+					//find the first instance
+					var j = Math.floor((start + end) / 2) - 1;
+					while (j >= 0 && array[j] === value) j--;
+					return j + 1;
+				}
+				else if (value < array[Math.floor((start + end) / 2)]) end = Math.floor((start + end) / 2) - 1;
+				else start = Math.floor((start + end) / 2) + 1;
+			}
+			return -1;
+
+		} else if (_.isNumber(isSorted)) startIndex = Math.max(0, isSorted >= 0 ? isSorted : getLength(array) + isSorted);
+
+		for (var i = startIndex; i < getLength(array); i++) {
+			if (array[i] === value || (isNAN && array[i] !== array[i])) return i;
+		}
+		return -1;
+	};
+
+	_.object = function (keys, values) {
+		var results = {};
+		if (values == null) {
+			for (var i = 0; i < getLength(keys); i++) {
+				results[keys[i][0]] = keys[i][1];
+			}
+		} else {
+			for (var k = 0; k < getLength(keys); k++) {
+				results[keys[k]] = values[k];
+			}
 		}
 
 		return results;
 	};
+
+	_.unzip = function () {
+		return _.zip.apply(null, arguments[0]);
+	};
+
+	_.zip = function () {
+		var results = [], maxlength = 0;
+
+		for (var i = 0; i < arguments.length; i++) {
+			getLength(arguments[i]) > maxlength ? maxlength = getLength(arguments[i]) : void 0;
+		}
+
+		for (i = 0; i < arguments.length; i++) {
+			for (var j = 0; j < maxlength; j++) {
+				if (results[j] == null) results[j] = [];
+				results[j][i] = arguments[i][j];
+			}
+		}
+
+		return results;
+	};
+
+	_.difference = function (array) {
+		var next = array, params;
+		for (var i = 1; i < arguments.length; i++) {
+			if (_.isArray(arguments[i]) || isArrayLike(arguments[i])) {
+				params = [next].concat(arguments[i]);
+				next = _.without.apply(null, params);
+			}
+		}
+
+		return next;
+	};
+
+	_.union = function () {
+		var arrays = arguments;
+		var results = [];
+		for (var i = 0; i < arrays.length; i++) {
+			for (var j = 0; j < getLength(arrays[i]); j++) {
+				if (results.indexOf(arrays[i][j]) < 0) results.push(arrays[i][j]);
+			}
+		}
+		return results;
+	};
+
+	function getLength(array) {
+		return array == null ? void 0 : array.length;
+	}
+
+	_.intersection = function () {
+		var arrays = arguments;
+		var next = [], predicate;
+		
+		//remove duplicate from the first array
+		for (var j = 0; j < getLength(arrays[0]); j++) {
+			if (next.indexOf(arrays[0][j]) < 0) next.push(arrays[0][j]);
+		}
+
+		for (var i = 1; i < arrays.length; i++) {
+			predicate = function (value) {
+				return arrays[i] != null && arrays[i].indexOf && arrays[i].indexOf(value) >= 0;
+			};
+
+			next = _.filter(next, predicate);
+		}
+
+		return next;
+	};
+
+	function binarySearch(list, start, end, value, iteratee) {
+		if (start > end) return void 0;
+		if (start === end) return iteratee(list[start]) < iteratee(value) ? start + 1 : start;
+
+		var middle = start + Math.floor((end - start) / 2);
+		if (iteratee(list[middle]) < iteratee(value)) return binarySearch(list, Math.min(middle + 1, end), end, value, iteratee);
+		else return binarySearch(list, start, Math.max(start, middle - 1), value, iteratee);
+	}
+
+	_.sortedIndex = function (list, value, iteratee, context) {
+		if (list == null) return void 0;
+		var myIteratee = cb(iteratee, context);
+		return binarySearch(list, 0, list.length - 1, value, myIteratee);
+	};
+
+	_.without = function (array) {
+		if (array == null) return void 0;
+
+		var values = [].slice.call(arguments, 1);
+		var filter = function (value) {
+			return values.indexOf(value) < 0;
+		};
+
+		return _.filter(array, filter);
+	};
+
+	_.flatten = function (array, shallow) {
+		if (array == null) return [];
+		var flat = [];
+		for (var i = 0; i < array.length; i++) {
+			if (_.isArray(array[i]) || isArrayLike(array[i])) {
+				if (shallow) flat = flat.concat(array[i]);
+				else flat = flat.concat(_.flatten(array[i]));
+			}
+			else flat.push(array[i]);
+		}
+
+		return flat;
+	};
 	
-	var contains = function(array, object){
-		if(!isArrayLike(array)) return false;
-		for(var i = 0 ; i < array.length; i++){
-			if(object === array[i]) return true;
+	// guard allows it to work well with _.map
+	_.initial = function (array, index, guard) {
+		if (array == null) return void 0;
+		if (index == null || guard) return _.first(array, array.length - 1);
+
+		return _.first(array, array.length - index);
+	};
+
+	_.rest = function (array, index, guard) {
+		if (array == null) return void 0;
+		if (index == null || guard) return [].slice.call(array, 1, array.length);
+
+		return [].slice.call(array, Math.max(0, index), array.length);
+
+	};
+
+	_.tail = _.rest;
+
+	_.drop = _.rest;
+
+	_.first = function (array, n, guard) {
+		if (!_.isArray(array) && !isArrayLike(array)) return null;
+
+		if (n == null || guard) return array[0];
+
+		return [].slice.call(array, 0, Math.max(n, 0));
+
+	};
+
+	_.take = _.first;
+
+	_.head = _.first;
+
+	_.last = function last(array, n, guard) {
+		if (array == null) return void 0;
+
+		if (n == null || guard)
+			return array[array.length - 1];
+
+		var start = Math.max(0, array.length - n);
+
+		return Array.prototype.slice.call(array, start);
+	};
+
+	var contains = function (array, object) {
+		if (!isArrayLike(array)) return false;
+		for (var i = 0; i < array.length; i++) {
+			if (object === array[i]) return true;
 		}
 		return false;
 	};
-	
-	_.uniq = function(array, isSorted, iteratee, context){
-		if(array == null) return [];
-		if(!_.isBoolean(isSorted)){
+
+	_.uniq = function (array, isSorted, iteratee, context) {
+		if (array == null) return [];
+		if (!_.isBoolean(isSorted)) {
 			context = iteratee;
 			iteratee = isSorted;
 			isSorted = false;
 		}
 		var myIteratee = cb(iteratee, context);
 		var seen = [], results = [];
-		
-		for(var i = 0; i < array.length; i ++){
+
+		for (var i = 0; i < array.length; i++) {
 			var value = myIteratee(array[i], i, array);
-			if(contains(seen, value)) continue;
+			if (contains(seen, value)) continue;
 			results.push(array[i]);
 			seen.push(value);
 		}
-		
+
 		return results;
 	};
+
+	_.unique = _.uniq;
 	
 	
 	// utilities
-	_.constant = constant;
 	
-	var uniqueIdMap = { global: 0};
-	_.uniqueId = function(prefix){
-		if(prefix){
-			if(uniqueIdMap[prefix] == null)
-				uniqueIdMap[prefix] = 0;
-			return prefix + uniqueIdMap[prefix] ++;	
-		}
-		
-		return uniqueIdMap['global'] ++;
+	var unescapeMap = {
+		'&amp;': '&',
+		'&lt;': '<',
+		'&gt;': '>',
+		'&quot;': '"',
+		'&#39;': "'",
+		'&acute;': '`'
 	};
-	
-	_.now = Date.now || function(){ new Date().getTime();};
+
+	_.unescape = function (str) {
+
+		if (str == null) return '';
+
+		var unescaper = function (match) {
+			return unescapeMap[match];
+		};
+		var source = '(' + _.keys(unescapeMap).join('|') + ')';
+		var regex = RegExp(source, 'g');
+		return str.replace(regex, unescaper);
+	};
+
+	_.escape = function (str) {
+		if (str != null && str.replace) {
+			return str.replace(/&/g, '&amp;').replace(/>/g, '&gt;').replace(/</g, '&lt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/`/g, '&acute;');
+		}
+
+		return '';
+	};
+
+	_.times = function (n, iteratee, context) {
+		var results = [];
+		if (!_.isNumber(n) || !_.isFunction(iteratee)) return results;
+
+		for (var i = 0; i < n; i++) {
+			results.push(iteratee.call(context, i));
+		}
+
+		return results;
+	};
+
+	_.constant = constant;
+
+	var uniqueIdMap = { global: 0 };
+	_.uniqueId = function (prefix) {
+		if (prefix) {
+			if (uniqueIdMap[prefix] == null)
+				uniqueIdMap[prefix] = 0;
+			return prefix + uniqueIdMap[prefix]++;
+		}
+
+		return uniqueIdMap['global']++;
+	};
+
+	_.now = Date.now || function () { new Date().getTime(); };
 
 	_.noConflict = function () {
 		return this;
@@ -221,18 +510,6 @@
 	};
 
 	_.partial.placeholder = _;
-	
-	// arrays
-	function last(array, n) {
-		if (array == null) return array;
-
-		if (n == null)
-			return array[array.length - 1];
-
-		var start = Math.max(0, array.length - n);
-
-		return Array.prototype.slice.call(array, start);
-	}
 
 	// collections
 	
@@ -240,17 +517,17 @@
 		if (list == null || !_.isFunction(predicate)) return false;
 
 		for (var i = 0; i < list.length; i++) {
-			if(!predicate.call(context, list[i])) return false;;
+			if (!predicate.call(context, list[i])) return false;;
 		}
 
 		return true;
 	};
-	
-	_.some = function(list, predicate, context){
+
+	_.some = function (list, predicate, context) {
 		if (list == null || !_.isFunction(predicate)) return false;
 
 		for (var i = 0; i < list.length; i++) {
-			if(predicate.call(context, list[i])) return true;;
+			if (predicate.call(context, list[i])) return true;;
 		}
 
 		return false;
